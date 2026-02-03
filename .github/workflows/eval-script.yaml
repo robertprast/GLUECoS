@@ -44,8 +44,7 @@ jobs:
         fi
         echo "[*] Extracting results..."
         unzip -o "$RESULTS_ZIP" -d extracted/
-
-        # Source config files if present
+        
         if [ -f "extracted/Results/config.sh" ]; then
             echo "[!] Sourcing config.sh..."
             source "extracted/Results/config.sh"
@@ -54,8 +53,7 @@ jobs:
             echo "[!] Sourcing setup.sh..."
             source "extracted/Results/setup.sh"
         fi
-
-        # Evaluate predictions
+        
         for task_dir in extracted/Results/*/; do
             if [ -d "$task_dir" ]; then
                 task=$(basename "$task_dir")
@@ -67,27 +65,31 @@ jobs:
                 fi
             fi
         done
-
-        # Python evaluation with pickle loading
-        python3 << 'PYEOF'
-import os
-import pickle
-results_dir = "extracted/Results"
-for root, dirs, files in os.walk(results_dir):
-    for f in files:
-        if f.endswith('.pkl'):
-            print(f"[!] Loading pickle: {os.path.join(root, f)}")
-            try:
-                with open(os.path.join(root, f), 'rb') as pf:
-                    data = pickle.load(pf)
-                    print(f"  Pickle loaded")
-            except Exception as e:
-                print(f"  Error: {e}")
-PYEOF
-
+        
         echo "[*] Evaluation complete"
         rm -rf extracted/
         EVALSCRIPT
         chmod +x eval/eval.sh
+    - name: Create Python eval script
+      run: |
+        cat > eval/eval_pickle.py << 'PYSCRIPT'
+        import os
+        import pickle
+        results_dir = "extracted/Results"
+        if os.path.exists(results_dir):
+            for root, dirs, files in os.walk(results_dir):
+                for f in files:
+                    if f.endswith('.pkl'):
+                        print(f"[!] Loading pickle: {os.path.join(root, f)}")
+                        try:
+                            with open(os.path.join(root, f), 'rb') as pf:
+                                data = pickle.load(pf)
+                                print(f"  Pickle loaded")
+                        except Exception as e:
+                            print(f"  Error: {e}")
+        PYSCRIPT
     - name: Run Eval
-      run: cd eval && ./eval.sh ../results.zip
+      run: |
+        cd eval
+        ./eval.sh ../results.zip
+        python3 eval_pickle.py || true
